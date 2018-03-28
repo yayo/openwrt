@@ -1,0 +1,104 @@
+--- opensmtpd-6.0.3p1/configure.ac	2018-01-10 13:06:40.000000000 +0000
++++ opensmtpd-6.0.3p1/configure.ac	2018-01-10 13:06:40.000000000 +0000
+@@ -1310,37 +1310,6 @@
+ 
+ # Where to place smtpd.pid
+ piddir=/var/run
+-AC_RUN_IFELSE(
+-	[
+-		AC_LANG_PROGRAM([[
+-#include <stdio.h>
+-#include <stdlib.h>
+-#ifdef HAVE_PATHS_H
+-#include <paths.h>
+-#endif
+-#define DATA "conftest.piddir"
+-		]],
+-		[[
+-#ifdef _PATH_VARRUN
+-FILE *fd;
+-int rc;
+-
+-if ((fd = fopen(DATA,"w")) == NULL) { exit(1); }
+-if ((rc = fprintf(fd ,"%s\n", _PATH_VARRUN)) < 0) { exit(2); }
+-exit(0);
+-#else
+-exit(-1);
+-#endif
+-		]])
+-	],		[
+-		piddir=`cat conftest.piddir`
+-		AC_MSG_RESULT([using $piddir from paths.h])
+-	],
+-	[
+-		AC_MSG_RESULT([using $piddir from default value])
+-	]
+-)
+-
+ AC_ARG_WITH([path-pidfile],
+ 	[  --with-path-pidfile=PATH	Specify path to smtpd.pid directory (default=/var/run)],
+ 	[
+--- opensmtpd-6.0.3p1/configure	2018-01-16 08:46:08.000000000 +0000
++++ opensmtpd-6.0.3p1/configure	2018-01-16 08:46:08.000000000 +0000
+@@ -17908,61 +17908,6 @@
+ 
+ # Where to place smtpd.pid
+ piddir=/var/run
+-if test "$cross_compiling" = yes; then :
+-  { { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
+-$as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
+-as_fn_error $? "cannot run test program while cross compiling
+-See \`config.log' for more details" "$LINENO" 5; }
+-else
+-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+-/* end confdefs.h.  */
+-
+-
+-#include <stdio.h>
+-#include <stdlib.h>
+-#ifdef HAVE_PATHS_H
+-#include <paths.h>
+-#endif
+-#define DATA "conftest.piddir"
+-
+-int
+-main ()
+-{
+-
+-#ifdef _PATH_VARRUN
+-FILE *fd;
+-int rc;
+-
+-if ((fd = fopen(DATA,"w")) == NULL) { exit(1); }
+-if ((rc = fprintf(fd ,"%s\n", _PATH_VARRUN)) < 0) { exit(2); }
+-exit(0);
+-#else
+-exit(-1);
+-#endif
+-
+-  ;
+-  return 0;
+-}
+-
+-_ACEOF
+-if ac_fn_c_try_run "$LINENO"; then :
+-
+-		piddir=`cat conftest.piddir`
+-		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: using $piddir from paths.h" >&5
+-$as_echo "using $piddir from paths.h" >&6; }
+-
+-else
+-
+-		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: using $piddir from default value" >&5
+-$as_echo "using $piddir from default value" >&6; }
+-
+-
+-fi
+-rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
+-  conftest.$ac_objext conftest.beam conftest.$ac_ext
+-fi
+-
+-
+ 
+ # Check whether --with-path-pidfile was given.
+ if test "${with_path_pidfile+set}" = set; then :

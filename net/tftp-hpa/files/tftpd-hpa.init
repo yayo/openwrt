@@ -1,0 +1,17 @@
+#!/bin/sh /etc/rc.common
+
+START=50
+
+RUN_AS="root"
+CAN_CREATE="--create"
+BLOCKSIZE=65464
+RUN_D=/var/tftpd
+
+start() {
+	[ -d ${RUN_D} ] || mkdir -p ${RUN_D}
+	/usr/sbin/in.tftpd -4 -l -a 0.0.0.0:69 -P /var/run/tftpd.pid -u ${RUN_AS} ${CAN_CREATE} --blocksize ${BLOCKSIZE} -s ${RUN_D}
+}
+
+stop() {
+	killall in.tftpd
+}

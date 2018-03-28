@@ -1,0 +1,104 @@
+--- mailutils-3.4/mail/mailvar.c	2017-06-15 19:30:16.000000000 +0000
++++ mailutils-3.4/mail/mailvar.c	2017-10-21 14:23:10.907478025 +0000
+@@ -245,6 +245,9 @@
+     { { "sendmail", },
+       MAILVAR_TYPEMASK (mailvar_type_string),
+       N_("URL of the mail transport agent") },
++    { { "sourceip", },
++      MAILVAR_TYPEMASK (mailvar_type_string),
++      N_("pick your IP address for outgoing messages") },
+     /* FIXME: Not yet used. */
+     { { "sendwait", },
+       MAILVAR_TYPEMASK (mailvar_type_boolean) | MAILVAR_HIDDEN, NULL },
+--- mailutils-3.4/mail/send.c	2017-07-17 13:16:22.000000000 +0000
++++ mailutils-3.4/mail/send.c	2017-07-17 13:16:22.000000000 +0000
+@@ -20,7 +20,7 @@
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ #include <fcntl.h>
+-
++#include <mailutils/property.h>
+ static int isfilename (const char *);
+ static int msg_to_pipe (const char *cmd, mu_message_t msg);
+ 
+@@ -1112,6 +1112,7 @@
+       else
+ 	{
+ 	  mu_mailer_t mailer;
++	  const char * sourceip_str;
+ 	  
+ 	  status = mu_mailer_create (&mailer, sendmail);
+ 	  if (status == 0)
+@@ -1138,6 +1139,15 @@
+ 		  mu_debug_set_category_level (MU_DEBCAT_MAILER,
+ 					  MU_DEBUG_LEVEL_UPTO (MU_DEBUG_PROT));
+ 		}
++              if(0==mailvar_get(&sourceip_str,"sourceip",mailvar_type_string,0)&&7<=strlen(sourceip_str))
++               {mu_property_t p=NULL;
++                if(0!=(status=mu_mailer_get_property(mailer,&p)))
++                 return(status);
++                else
++                 {if(0!=(status=mu_property_set_value(p,"sourceip",sourceip_str,1)))
++                   return(status);
++                 }
++               }
+ 	      status = mu_mailer_open (mailer, MU_STREAM_RDWR);
+ 	      if (status == 0)
+ 		{
+--- mailutils-3.4/libproto/mailer/smtp.c	2017-10-10 08:16:45.000000000 +0000
++++ mailutils-3.4/libproto/mailer/smtp.c	2017-10-21 14:23:10.907478025 +0000
+@@ -199,6 +199,14 @@
+       struct mu_sockaddr *sa;
+       struct mu_sockaddr_hints hints;
+       mu_stream_t transport;
++      union
++       {struct sockaddr_in in;
++#ifdef MAILUTILS_IPV6
++        struct sockaddr_in6 in6;
++#endif
++       } addr;
++      struct mu_sockaddr mu_addr={NULL,NULL,(struct sockaddr*)&addr,0,NULL};
++      mu_property_t property=NULL;
+       
+       memset (&hints, 0, sizeof (hints));
+       hints.flags = MU_AH_DETECT_FAMILY;
+@@ -209,7 +217,38 @@
+       if (rc)
+ 	return rc;
+       
+-      rc = mu_tcp_stream_create_from_sa (&transport, sa, NULL, mailer->flags);
++      if(0!=(rc=mu_mailer_get_property(mailer,&property)))
++       return(rc);
++      else
++       {const char *sourceip_str;
++        if(0==mu_property_sget_value(property,"sourceip",&sourceip_str))
++         {switch(sa->addr->sa_family)
++           {case AF_INET:
++             addr.in.sin_family=AF_INET;
++             addr.in.sin_port=0;
++             rc=inet_pton(AF_INET,sourceip_str,&(addr.in.sin_addr));
++             mu_addr.addrlen=sizeof(addr.in);
++             break;
++#ifdef MAILUTILS_IPV6
++            case AF_INET6:
++             addr.in6.sin6_family=AF_INET6;
++             addr.in6.sin6_port=0;
++             rc=inet_pton(AF_INET6,sourceip_str,&(addr.in6.sin6_addr));
++             mu_addr.addrlen=sizeof(addr.in6);
++             break;
++#endif
++            default:
++             return(MU_ERR_FAMILY);
++           }
++          if(1!=rc)
++           {if(0==rc)
++             return(MU_ERR_NONAME);
++            else
++             return(MU_ERR_FAILURE);
++           }
++         }
++       }
++      rc = mu_tcp_stream_create_from_sa (&transport, sa, (mu_addr.addrlen ? &mu_addr : NULL), mailer->flags);
+       if (rc)
+         {
+           mu_sockaddr_free (sa);

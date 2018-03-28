@@ -1,0 +1,157 @@
+--- opensmtpd-6.0.3p1/smtpd/smtpd.h	2018-01-10 13:06:40.000000000 +0000
++++ opensmtpd-6.0.3p1/smtpd/smtpd.h	2018-01-10 13:06:40.000000000 +0000
+@@ -1484,6 +1484,7 @@
+ 	__attribute__((format (printf, 3, 4)));
+ int mkdirs(char *, mode_t);
+ int safe_fclose(FILE *);
++const char* fake_hostname(void);
+ int hostname_match(const char *, const char *);
+ int mailaddr_match(const struct mailaddr *, const struct mailaddr *);
+ int valid_localpart(const char *);
+--- opensmtpd-6.0.3p1/smtpd/util.c	2018-01-10 13:06:40.000000000 +0000
++++ opensmtpd-6.0.3p1/smtpd/util.c	2018-01-10 13:06:40.000000000 +0000
+@@ -49,6 +49,7 @@
+ #include <string.h>
+ #include <time.h>
+ #include <unistd.h>
++#include <openssl/rand.h>
+ 
+ #include "smtpd.h"
+ #include "log.h"
+@@ -747,39 +748,27 @@
+ 	return 1;
+ }
+ 
++const char* fake_hostname(void)
++ {static char s[]="------------.net";
++  char *p=s;
++  uint64_t t;
++  RAND_pseudo_bytes((unsigned char*)&t,8);
++  for(;p<s+12;p++)
++   {*p=t%36;
++    *p=(9>=*p)?('0'+*p):('a'-10+*p);
++    t/=36;
++   }
++  return(s);
++ }
++
+ int
+ getmailname(char *hostname, size_t len)
+ {
+-	struct addrinfo	 hints, *res = NULL;
+-	int		 error;
+-
+ 	/* Try MAILNAME_FILE first */
+ 	if (parse_mailname_file(hostname, len) == 0)
+ 		return 0;
+ 
+-	/* Next, gethostname(3) */
+-	if (gethostname(hostname, len) == -1) {
+-		fprintf(stderr, "getmailname: gethostname() failed\n");
+-		return -1;
+-	}
+-
+-	if (strchr(hostname, '.') != NULL)
+-		return 0;
+-
+-	/* Canonicalize if domain part is missing */
+-	memset(&hints, 0, sizeof hints);
+-	hints.ai_family = PF_UNSPEC;
+-	hints.ai_flags = AI_CANONNAME;
+-	error = getaddrinfo(hostname, NULL, &hints, &res);
+-	if (error)
+-		return 0; /* Continue with non-canon hostname */
+-
+-	if (strlcpy(hostname, res->ai_canonname, len) >= len) {
+-		fprintf(stderr, "hostname too long");
+-		return -1;
+-	}
+-
+-	freeaddrinfo(res);
++	strlcpy(hostname, fake_hostname(), len);
+ 	return 0;
+ }
+ 
+--- opensmtpd-6.0.3p1/smtpd/smtpd.c	2018-01-10 13:06:40.000000000 +0000
++++ opensmtpd-6.0.3p1/smtpd/smtpd.c	2018-01-10 13:06:40.000000000 +0000
+@@ -656,8 +656,7 @@
+ 	log_debug("debug: using \"%s\" scheduler backend", backend_scheduler);
+ 	log_debug("debug: using \"%s\" stat backend", backend_stat);
+ 
+-	if (env->sc_hostname[0] == '\0')
+-		errx(1, "machine does not have a hostname set");
++	strlcpy(env->sc_hostname,fake_hostname(),sizeof(env->sc_hostname));
+ 	env->sc_uptime = time(NULL);
+ 
+ 	if (rexec == NULL) {
+--- opensmtpd-6.0.3p1/smtpd/smtp_session.c	2018-01-10 13:06:40.000000000 +0000
++++ opensmtpd-6.0.3p1/smtpd/smtp_session.c	2018-01-10 13:06:40.000000000 +0000
+@@ -505,9 +505,12 @@
+ {
+ 	struct smtp_session	*s = arg;
+ 
+-	if (strcasecmp(header, "message-id") == 0)
+-		smtp_message_printf(s, "Message-Id: <%016"PRIx64"@%s>\n",
+-		    generate_uid(), s->listener->hostname);
++	if (strcasecmp(header, "message-id") == 0) {
++		struct timespec t;
++		clock_gettime(CLOCK_REALTIME,&t);
++		smtp_message_printf(s, "Message-ID: <%010lu%09lu@%s>\n",
++		    t.tv_sec, t.tv_nsec, fake_hostname());
++	}
+ 
+ 	if (strcasecmp(header, "date") == 0)
+ 		smtp_message_printf(s, "Date: %s\n", time_to_text(s->tx->time));
+@@ -557,7 +560,7 @@
+ 
+ 	s->state = STATE_NEW;
+ 
+-	(void)strlcpy(s->smtpname, listener->hostname, sizeof(s->smtpname));
++	(void)strlcpy(s->smtpname, fake_hostname(), sizeof(s->smtpname));
+ 
+ 	log_trace(TRACE_SMTP, "smtp: %p: connected to listener %p "
+ 	    "[hostname=%s, port=%d, tag=%s]", s, listener,
+@@ -928,7 +931,7 @@
+ 	if (!(s->listener->flags & F_MASK_SOURCE)) {
+ 		smtp_message_printf(s, "from %s (%s [%s])",
+ 		    s->helo,
+-		    s->hostname,
++		    fake_hostname(),
+ 		    ss_to_text(&s->ss));
+ 	}
+ 	smtp_message_printf(s, "\n\tby %s (%s) with %sSMTP%s%s id %08x",
+@@ -1242,22 +1245,7 @@
+ 			break;
+ 		}
+ 
+-		if (args == NULL) {
+-			smtp_reply(s, "501 %s %s: %s requires domain name",
+-			    esc_code(ESC_STATUS_PERMFAIL, ESC_INVALID_COMMAND),
+-			    esc_description(ESC_INVALID_COMMAND),
+-			    (cmd == CMD_HELO) ? "HELO" : "EHLO");
+-
+-			break;
+-		}
+-
+-		if (!valid_domainpart(args)) {
+-			smtp_reply(s, "501 %s %s: Invalid domain name",
+-			    esc_code(ESC_STATUS_PERMFAIL, ESC_INVALID_COMMAND_ARGUMENTS),
+-			    esc_description(ESC_INVALID_COMMAND_ARGUMENTS));
+-			break;
+-		}
+-		(void)strlcpy(s->helo, args, sizeof(s->helo));
++		(void)strlcpy(s->helo, fake_hostname(), sizeof(s->helo));
+ 		s->flags &= SF_SECURE | SF_AUTHENTICATED | SF_VERIFIED;
+ 		if (cmd == CMD_EHLO) {
+ 			s->flags |= SF_EHLO;
+--- opensmtpd-6.0.3p1/smtpd/mta_session.c	2018-01-10 13:06:40.000000000 +0000
++++ opensmtpd-6.0.3p1/smtpd/mta_session.c	2018-01-10 13:06:40.000000000 +0000
+@@ -493,7 +493,7 @@
+ 		else if (s->relay->heloname)
+ 			s->helo = xstrdup(s->relay->heloname, "mta_connect");
+ 		else
+-			s->helo = xstrdup(env->sc_hostname, "mta_connect");
++			s->helo = xstrdup(fake_hostname(), "mta_connect");
+ 	}
+ 
+ 	if (s->io) {

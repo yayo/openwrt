@@ -1,0 +1,30 @@
+--- mailutils-3.4/include/mailutils/sys/mailer.h	2017-06-08 13:08:20.000000000 +0000
++++ mailutils-3.4/include/mailutils/sys/mailer.h	2017-10-21 14:23:10.907478025 +0000
+@@ -22,6 +22,7 @@
+ # include <sys/types.h>
+ # include <mailutils/mailer.h>
+ # include <mailutils/monitor.h>
++# include <mailutils/sys/url.h>
+ 
+ # ifdef __cplusplus
+ extern "C" {
+--- mailutils-3.4/libmailutils/mailer/mailer.c	2017-06-08 13:08:20.000000000 +0000
++++ mailutils-3.4/libmailutils/mailer/mailer.c	2017-06-08 13:08:20.000000000 +0000
+@@ -477,6 +477,17 @@
+ 	  break;
+ 	}
+       status = safe_address_create (pfrom, mail_from, "sender");
++      if(MU_ERR_INVALID_EMAIL==status && mailer->url->user)
++       {char *t=(char*)mail_from;
++        for(;0!=*t&&'@'!=*t&&':'!=*t;t++){}
++        *t=0;
++        t=alloca(strlen(mail_from)+1+1+strlen(mailer->url->user)+1+1);
++        sprintf(t,"%s <%s>",mail_from,mailer->url->user);
++        mu_header_t header;
++        status=mu_message_get_header(msg,&header);
++        if(!status) mu_header_set_value(header,MU_HEADER_FROM,t,1);
++        status = safe_address_create (pfrom, t, "sender");
++       }
+     }
+   
+   return status;

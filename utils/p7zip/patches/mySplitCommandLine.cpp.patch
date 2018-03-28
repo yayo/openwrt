@@ -1,0 +1,25 @@
+--- p7zip-16.02/p7zip_16.02/CPP/myWindows/mySplitCommandLine.cpp	2015-10-10 12:37:36.000000000 +0000
++++ p7zip-16.02/p7zip_16.02/CPP/myWindows/mySplitCommandLine.cpp	2015-10-10 12:37:36.000000000 +0000
+@@ -14,6 +14,7 @@
+ #endif
+ 
+ #include <string.h> // memset
++// #include <libgen.h>
+ 
+ extern void my_windows_split_path(const AString &p_path, AString &dir , AString &base);
+ 
+@@ -106,9 +107,11 @@
+ 
+   { // define P7ZIP_HOME_DIR
+     static char p7zip_home_dir[MAX_PATH];
+-    AString dir,name;
+-    my_windows_split_path(arguments[0],dir,name);
+-    snprintf(p7zip_home_dir,sizeof(p7zip_home_dir),"P7ZIP_HOME_DIR=%s/",(const char *)dir);
++    // char s[MAX_PATH]={0};
++    // sprintf(p7zip_home_dir,"/proc/%d/exe",getpid());
++    // memset(s,0,sizeof(s));
++    // readlink(p7zip_home_dir,s,sizeof(s));
++    snprintf(p7zip_home_dir,sizeof(p7zip_home_dir),"P7ZIP_HOME_DIR=%s/","/usr/lib/p7zip" /*dirname(s)*/);
+     p7zip_home_dir[sizeof(p7zip_home_dir)-1] = 0;
+     putenv(p7zip_home_dir);
+   }

@@ -1,0 +1,109 @@
+--- mailutils-3.4/configure.ac	2017-10-18 08:17:15.000000000 +0000
++++ mailutils-3.4/configure.ac	2017-10-22 08:36:03.422100301 +0000
+@@ -1056,6 +1056,9 @@
+ 	fi
+ fi
+ 
++AC_CHECK_LIB(gnutls, gnutls_rnd)
++AC_CHECK_LIB(rt, clock_gettime)
++
+ AC_CHECK_HEADERS(crypt.h)
+ AC_CHECK_DECLS(crypt, , ,[
+ #include <unistd.h>
+--- mailutils-3.4/include/mailutils/util.h	2017-06-08 13:08:20.000000000 +0000
++++ mailutils-3.4/include/mailutils/util.h	2017-06-08 13:08:20.000000000 +0000
+@@ -240,6 +240,7 @@
+ int mu_getmaxfd (void);
+ /* Get the host name, doing a gethostbyname() if possible. */
+ int mu_get_host_name (char **host);
++const char* fake_hostname(void);
+ int mu_spawnvp (const char *prog, char *av[], int *stat);
+ int mu_scheme_autodetect_p (mu_url_t);
+ int mu_set_user_privileges (uid_t uid, gid_t *gidv, size_t gidc);
+--- mailutils-3.4/libmailutils/base/hostname.c	2017-06-08 13:08:20.000000000 +0000
++++ mailutils-3.4/libmailutils/base/hostname.c	2017-06-08 13:08:20.000000000 +0000
+@@ -24,6 +24,8 @@
+ #include <errno.h>
+ #include <string.h>
+ #include <netdb.h>
++#include <gnutls/gnutls.h>
++#include <gnutls/crypto.h>
+ 
+ #ifndef MAXHOSTNAMELEN
+ # define MAXHOSTNAMELEN 64
+@@ -100,3 +102,18 @@
+   return 0;
+ }  
+ 
++const char* fake_hostname(void)
++ {static char s[]="\0-----------.net";
++  char *p=s;
++  if(0==*p)
++   {unsigned long long t;
++    gnutls_rnd(GNUTLS_RND_RANDOM,(void*)&t,8);
++    for(;p<s+12;p++)
++     {*p=t%36;
++      *p=(9>=*p)?('0'+*p):('a'-10+*p);
++      t/=36;
++     }
++   }
++  return(s);
++ }
++
+--- mailutils-3.4/libmailutils/base/msgid.c	2017-06-08 13:08:20.000000000 +0000
++++ mailutils-3.4/libmailutils/base/msgid.c	2017-06-08 13:08:20.000000000 +0000
+@@ -132,25 +132,11 @@
+   char date[4+2+2+2+2+2+1];
+   time_t t = time (NULL);
+   struct tm *tm = localtime (&t);
+-  char *host;
+   char *p;
+-	  
++  static size_t n=0;
++  n++;
+   mu_strftime (date, sizeof date, "%Y%m%d%H%M%S", tm);
+-  mu_get_host_name (&host);
+-
+-  if (subpart)
+-    {
+-      struct timeval tv;
+-      gettimeofday (&tv, NULL);
+-      mu_asprintf (&p, "<%s.%lu.%d@%s>",
+-		   date,
+-		   (unsigned long) getpid (),
+-		   subpart,
+-		   host);
+-    }
+-  else
+-    mu_asprintf (&p, "<%s.%lu@%s>", date, (unsigned long) getpid (), host);
+-  free (host);
++  mu_asprintf (&p, "<%s.%lu.%lu@%s>", date, (unsigned long) getpid (), n, fake_hostname());
+   *pval = p;
+   return 0;
+ }
+--- mailutils-3.4/libproto/mailer/smtp_ehlo.c	2017-11-01 08:40:01.000000000 +0000
++++ mailutils-3.4/libproto/mailer/smtp_ehlo.c	2017-11-01 08:40:01.000000000 +0000
+@@ -79,22 +79,7 @@
+       else
+ 	p = NULL;
+ 
+-      if (!p)
+-	{
+-	  struct mu_sockaddr *addr;
+-	  
+-	  status = mu_stream_ioctl (smtp->carrier, MU_IOCTL_TCPSTREAM,
+-				    MU_IOCTL_TCP_GETSOCKNAME,
+-				    &addr);
+-	  if (status == 0)
+-	    {
+-	      status = mu_sockaddr_format (addr, &host,
+-					   mu_sockaddr_format_ehlo);
+-	      mu_sockaddr_free (addr);
+-	      p = host;
+-	    }
+-	  MU_SMTP_CHECK_ERROR (smtp, status);
+-	}
++      if(NULL==p||0==p[0]) p=fake_hostname();
+       status = mu_smtp_set_param (smtp, MU_SMTP_PARAM_DOMAIN, p);
+       free (host);
+       MU_SMTP_CHECK_ERROR (smtp, status);

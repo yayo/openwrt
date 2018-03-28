@@ -1,0 +1,32 @@
+--- mailutils-3.4/libmailutils/mime/attachment.c	2017-06-08 13:08:20.000000000 +0000
++++ mailutils-3.4/libmailutils/mime/attachment.c	2017-06-08 13:08:20.000000000 +0000
+@@ -104,9 +104,6 @@
+       rc = mu_header_set_value (hdr, MU_HEADER_CONTENT_DISPOSITION, val, 1);
+       free (val);
+     }
+-  else
+-    rc = mu_header_set_value (hdr, MU_HEADER_CONTENT_DISPOSITION, "attachment",
+-			      1);
+   if (rc)
+     return rc;
+   return mu_header_set_value (hdr, MU_HEADER_CONTENT_TRANSFER_ENCODING,
+--- mailutils-3.4/mail/send.c	2017-07-17 13:16:22.000000000 +0000
++++ mailutils-3.4/mail/send.c	2017-07-17 13:16:22.000000000 +0000
+@@ -183,7 +183,7 @@
+       && !strstr (content_type, "charset=")
+       && (charset = util_get_charset ()))
+     {
+-      mu_asprintf (&aptr->content_type, "%s; charset=%s",
++      mu_asprintf (&aptr->content_type, "%s; charset=\"%s\"",
+ 		   content_type, charset);
+       free (charset);
+     }
+@@ -532,7 +532,7 @@
+   aptr = mu_alloc (sizeof (*aptr));
+   aptr->id = NULL;
+   aptr->encoding = default_encoding ? mu_strdup (default_encoding) : NULL;
+-  attach_set_content_type (aptr, default_content_type);
++  attach_set_content_type (aptr, NULL);
+   aptr->name = NULL;
+   aptr->filename = NULL;
+   aptr->source = str;
