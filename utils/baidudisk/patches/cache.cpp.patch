@@ -1,0 +1,29 @@
+--- baidudisk/cache.cpp	2018-03-20 15:30:21.000000000 +0000
++++ baidudisk/cache.cpp	2018-03-20 15:30:21.000000000 +0000
+@@ -185,7 +185,7 @@
+     pthread_mutexattr_t mutexattr;
+     pthread_mutexattr_init(&mutexattr);
+     pthread_mutexattr_settype(&mutexattr,        //让它可以递归加锁
+-                              PTHREAD_MUTEX_RECURSIVE_NP);
++                              PTHREAD_MUTEX_RECURSIVE);
+     pthread_mutex_init(&Lock, &mutexattr);    //每个临时文件都有一把锁，操作它时如果不能确定没有其他线程也操作它就应该上锁，好多锁啊，真头疼
+     pthread_mutexattr_destroy(&mutexattr);
+ }
+@@ -327,7 +327,7 @@
+     pthread_mutexattr_t mutexattr;
+     pthread_mutexattr_init(&mutexattr);
+     pthread_mutexattr_settype(&mutexattr,        //让它可以递归加锁
+-                              PTHREAD_MUTEX_RECURSIVE_NP);
++                              PTHREAD_MUTEX_RECURSIVE);
+     pthread_mutex_init(&Lock, &mutexattr);    //每个临时文件都有一把锁，操作它时如果不能确定没有其他线程也操作它就应该上锁，好多锁啊，真头疼
+     pthread_mutexattr_destroy(&mutexattr);
+ }
+@@ -352,7 +352,7 @@
+     pthread_mutexattr_t mutexattr;
+     pthread_mutexattr_init(&mutexattr);
+     pthread_mutexattr_settype(&mutexattr,        //让它可以递归加锁
+-                              PTHREAD_MUTEX_RECURSIVE_NP);
++                              PTHREAD_MUTEX_RECURSIVE);
+     pthread_mutex_init(&Lock, &mutexattr);
+     pthread_mutexattr_destroy(&mutexattr);
+ }

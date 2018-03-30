@@ -1,0 +1,22 @@
+--- baidudisk/threadpool.h	2018-03-20 15:30:21.000000000 +0000
++++ baidudisk/threadpool.h	2018-03-20 15:30:21.000000000 +0000
+@@ -47,7 +47,7 @@
+ 
+ #define NEEDRET     1
+ #define WAIT        2
+-task_t addtask( taskfunc task, void *param ,uint flags);
++task_t addtask( taskfunc task, void *param ,unsigned int flags);
+ void* waittask(task_t id);                              //等待并取回结果，必须对每个needretval=1的任务执行，不然会导致类似"僵尸进程"的东西
+ int taskisdoing(task_t id);         //这是一个非阻塞接口，用来查询某任务是否在队列或者被执行
+ 
+--- baidudisk/threadpool.cpp	2018-03-20 15:30:21.000000000 +0000
++++ baidudisk/threadpool.cpp	2018-03-20 15:30:21.000000000 +0000
+@@ -105,7 +105,7 @@
+ }
+ 
+ 
+-task_t addtask(taskfunc task, void *param , uint flags) {
++task_t addtask(taskfunc task, void *param , unsigned int flags) {
+     tasknode *t = (tasknode *)malloc(sizeof(tasknode));   //生成一个任务块
+     t->param = param;
+     t->task = task;
